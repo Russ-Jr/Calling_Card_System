@@ -1,0 +1,53 @@
+/* User Dashboard Specific Styles - Mobile Portrait */
+
+.user-dashboard {
+    background: #f5f5f5;
+}
+
+.user-dashboard .dashboard-container {
+    padding-bottom: 20px;
+}
+
+.user-dashboard .profile-section,
+.user-dashboard .company-section,
+.user-dashboard .products-section {
+    margin-bottom: 20px;
+    padding: 20px;
+}
+
+.user-dashboard .profile-picture img,
+.user-dashboard .profile-placeholder {
+    width: 120px;
+    height: 120px;
+}
+
+.user-dashboard .products-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+.user-dashboard .product-item img {
+    height: 150px;
+}
+
+/* Touch-friendly buttons */
+.user-dashboard button,
+.user-dashboard .btn-primary {
+    min-height: 44px;
+    min-width: 44px;
+}
+
+/* Prevent text selection on tap */
+.user-dashboard {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.user-dashboard input,
+.user-dashboard textarea {
+    -webkit-user-select: text;
+    user-select: text;
+}
+

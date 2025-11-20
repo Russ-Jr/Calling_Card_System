@@ -1,0 +1,45 @@
+Here is the FUll Context of the Calling Card PHP System:
+
+Full Context of the NFC (mi fare) Calling Card PHP System, This system will be created through web-based using PHP programming codes, and MySQL cloud-server (cpanel) for the hosted database. In this system it has 2 modules one for admin which will be created using VB.NET web view into the website, then the other module is for the users which will be created through pure website/webpage but positioned as portrait for mobile webpage/browser view (should not be movable to left or right and should be fixed design).
+
+For the admin module, since we will be using VB.NET we will be needing the web view feature to access the website. Then the other reason for the used of VB.NET is for the NFC Reader (ACR122u) compatibility or also known as NFC Bridging. Now for the admin functionalities and features here are the noted objectives that we will be following:
+- When the VB.NET application is opened (on desktop) then it will first open up the account Tab login, then the admin will enter their admin's account login detail to access the editing and adding/modifications of the whole system. (account Tab login should also work for the user's dashboard to modify/edit the needed items/data/information based on the user module).
+
+- also the admin should still have the a (read only/view only for public) when the admin card is tapped to their phone to access the admin's public dashboard (just like the user modules when the NFC Card is tapped on the phone) this displays the same display of the user module's dashboard, and it will hide the employees list (and any other important details to be hidden). Then when the account Tab/Option is click it will show the hidden items and the editing and adding features will be enabled.
+
+- At the top there will be a header which displays the logo on the left side then account tab/option on the right. Now the logo should/can only be edited/change by the admin. This will reflect/displayed on the users dashboard's page as well.
+
+- Then next below the header there will be a profile picture, social media, and personal details container for the admin, it should have a profile picture then below it an icons for the admin's social media's like fb, gmail, etc. (editable, can be add), then after that the admin's personal details is also displayed under it.
+
+- Then below the profile picture, social media, and personal details container there will be the card holder member's list which displays all the employee's (users) that handles the Create/add New Card Data Entry.
+
+- Create/add New Card Data Entry: So, in the dashboard of the admin it should display the card holder member's list and in that list the admin is able to add new card holder's by showing a modal that the admin will enter the member's personal details such as first name, middle name, last name, email, and contact numbers, then other data (as optional) then when saved it should prompt or better, it should have a separate button for the NDEF/NFC URL to write into the NFC Card of the NFC mi fare Card to continue to register the NDEF URL into the NFC Card, then when the NFC Card is tapped then it receives the NFC UID (and update to save the UID into the database of the employee) then when it successfully saved in the database and have the NDEF URL as well then it should create a account for the user dashboard (by default username will be their first name + last name (no spaces) + year of creation) then the password will be (123456) that will be sent via personal email of the employee (using SMTP). 
+
+Then here is the sample flow, when all details is entered when click save it will record the employee's details in the database. Then there will be a button for the NDEF URL registration that will await for the NFC Card to be tapped through the NFC Reader (NFC Bridge) from the VB.NET then when the VB.NET receives the NFC UID successfully then it will update the employee's details and add the NFC UID in the database then the system (We will be using the VB.NET for the NDEF Format) that will write the NDEF URL (https://) link of the member's URL (sample: https://myhostingwebsite.com/user/dashboard.php?(firstname+lastname (no spaces)+user_id)) using NDEF format into the NFC Card. This can only be done when the admin is logged-in on the account's Tab/Option.
+
+- Then the admin can delete card holder member's data, and for the edit it can further edit the information/data of the card holder member's personal details including their login accounts credentials (when registered).
+
+- Then in the admin, there should be a Company Section. It can modify the company details that will be displayed in all card holder member's dashboards after or under the personal details. Company details consists company name (editable), company address (editable + able to add more address (for other branch address)), company contact numbers (editable + able to add more contact numbers), company emails (editable + able to add more emails), company social media's (editable + able to add more social media platforms (with icon or only icon)). Then in the company address it should display or show a map that shows the company's location (movable for both PC/desktop and mobile phone's browser). (This should be fixed and to be displayed to all user/dashboard's PHP page
+
+- Then in the admin, there should be a Product Section. In here it displays images of a product which accepts any images and when clicked it can be viewable or enhance to fully view the image of the product, so in the admin when he uploads an image it will be on the first, second or arrangeable as long as any image that the admin will upload it will be reflected/fixed/saved into user/dashboard's PHP page.
+
+- Then account tab/option on the header for the admin's login account credentials modifications but before accessing the account's tab it would first go through a login form which they will enter their account details.
+
+- Lastly, all editing and adding new data should only work after the admin logged in using the account's tab/options.
+
+
+For the user module, when the user have the NFC Card with their user/dashboard's PHP page. When they tap their NFC Card to their phone it should detect the url which will force it to direct into the phone's default browser to access their webpage/site. Then here are the users noted objectives that we will be following:
+- Firstly, the output/format should be designed for portrait/mobile browser's interface for a smooth UI/UX.
+
+- Next at the top there will be a header which displays the logo on the left side then account tab/option on the right. The logo displayed is based on the admin's header.
+
+- Then next will be a profile picture of the user, then below it an icon for the user's social media's like fb, gmail, etc. (editable, can be add)then after that the user's personal details is also displayed under it.
+
+- Then after that it will display the Company Section, that the admin modified/set to all the user's dashboard page.
+
+- Then after that is the Product Section.
+
+- Then in the account tab/option on the header for the user's login account credentials modifications but before accessing the account's tab it would first go through a login form which they will enter their account details.
+
+- Lastly, all editing and adding new data should only work after the user logged in using the account's tab/options.
+

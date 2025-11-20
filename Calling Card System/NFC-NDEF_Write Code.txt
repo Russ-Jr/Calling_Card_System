@@ -1,0 +1,470 @@
+
+Imports QRCoder
+Imports System.IO
+Imports System.Text
+Imports System.Runtime.InteropServices
+Imports System.Security.Cryptography
+
+Public Class encoder
+
+    ' Import functions from winscard.dll
+    <DllImport("winscard.dll")>
+    Private Shared Function SCardEstablishContext(dwScope As Integer, pvReserved1 As IntPtr, pvReserved2 As IntPtr, ByRef phContext As IntPtr) As Integer
+    End Function
+
+    <DllImport("winscard.dll")>
+    Private Shared Function SCardListReaders(hContext As IntPtr, mszGroups As Byte(), ByVal szReaders As Byte(), ByRef pcchReaders As Integer) As Integer
+    End Function
+
+    <DllImport("winscard.dll")>
+    Private Shared Function SCardConnect(hContext As IntPtr, szReader As String, dwShareMode As Integer, dwPreferredProtocols As Integer, ByRef phCard As IntPtr, ByRef pdwActiveProtocol As Integer) As Integer
+    End Function
+
+    <DllImport("winscard.dll")>
+    Private Shared Function SCardTransmit(hCard As IntPtr, pioSendPci As IntPtr, sendBuffer As Byte(), sendBufferLen As Integer, pioRecvPci As IntPtr, recvBuffer As Byte(), ByRef recvBufferLen As Integer) As Integer
+    End Function
+
+    <DllImport("winscard.dll")>
+    Private Shared Function SCardDisconnect(hCard As IntPtr, dwDisposition As Integer) As Integer
+    End Function
+
+    <DllImport("winscard.dll")>
+    Private Shared Function SCardReleaseContext(hContext As IntPtr) As Integer
+    End Function
+
+    Private Const SCARD_SCOPE_USER As Integer = 0
+    Private Const SCARD_SHARE_SHARED As Integer = 2
+    Private Const SCARD_PROTOCOL_T0 As Integer = 1
+    Private Const SCARD_PROTOCOL_T1 As Integer = 2
+    Private Const SCARD_LEAVE_CARD As Integer = 0
+
+    ' Structure for the PCI (Protocol Control Information)
+    <StructLayout(LayoutKind.Sequential)>
+    Private Structure SCARD_IO_REQUEST
+        Public dwProtocol As Integer
+        Public cbPciLength As Integer
+    End Structure
+
+    ' Predefined PCI pointers (for T0 and T1)
+    Private Shared ReadOnly SCARD_PCI_T0 As IntPtr
+    Private Shared ReadOnly SCARD_PCI_T1 As IntPtr
+
+    Shared Sub New()
+        ' Allocate and fill the PCI structures.
+        Dim pciT0 As New SCARD_IO_REQUEST With {
+            .dwProtocol = SCARD_PROTOCOL_T0,
+            .cbPciLength = Marshal.SizeOf(GetType(SCARD_IO_REQUEST))
+        }
+        Dim pciT1 As New SCARD_IO_REQUEST With {
+            .dwProtocol = SCARD_PROTOCOL_T1,
+            .cbPciLength = Marshal.SizeOf(GetType(SCARD_IO_REQUEST))
+        }
+        SCARD_PCI_T0 = Marshal.AllocHGlobal(Marshal.SizeOf(GetType(SCARD_IO_REQUEST)))
+        Marshal.StructureToPtr(pciT0, SCARD_PCI_T0, False)
+        SCARD_PCI_T1 = Marshal.AllocHGlobal(Marshal.SizeOf(GetType(SCARD_IO_REQUEST)))
+        Marshal.StructureToPtr(pciT1, SCARD_PCI_T1, False)
+    End Sub
+
+    Private Sub encoder_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+        Me.DoubleBuffered = True
+        Me.SetStyle(ControlStyles.OptimizedDoubleBuffer Or ControlStyles.AllPaintingInWmPaint Or ControlStyles.UserPaint, True)
+        Me.UpdateStyles()
+        urlcb.Items.Clear()
+        urlcb.Items.Add("https://")
+        urlcb.Items.Add("http://")
+
+        urlcb.SelectedIndex = 0
+        pathTB.Focus()
+    End Sub
+
+
+    Private Sub pathTB_KeyDown(sender As Object, e As KeyEventArgs) Handles pathTB.KeyDown
+        If e.KeyCode = Keys.Enter Then
+            encodebtn.PerformClick()
+        End If
+    End Sub
+
+
+    '-------------------------------
+    ' ENCODER PROGRAM
+    '-------------------------------
+    '
+
+    '-------------------------------
+    ' AES ENCRYPTION & DECRYPTION
+    '-------------------------------
+
+    Private Function EncryptText(plainText As String, key As String, iv As String) As String
+        Dim aes As New AesCryptoServiceProvider()
+        aes.Key = Encoding.UTF8.GetBytes(key)
+        aes.IV = Encoding.UTF8.GetBytes(iv)
+        Dim encryptor As ICryptoTransform = aes.CreateEncryptor()
+        Dim plainBytes As Byte() = Encoding.UTF8.GetBytes(plainText)
+        Dim encryptedBytes As Byte() = encryptor.TransformFinalBlock(plainBytes, 0, plainBytes.Length)
+        Return Convert.ToBase64String(encryptedBytes)
+    End Function
+
+    Private Function DecryptText(encryptedText As String, key As String, iv As String) As String
+        Dim aes As New AesCryptoServiceProvider()
+        aes.Key = Encoding.UTF8.GetBytes(key)
+        aes.IV = Encoding.UTF8.GetBytes(iv)
+        Dim decryptor As ICryptoTransform = aes.CreateDecryptor()
+        Dim encryptedBytes As Byte() = Convert.FromBase64String(encryptedText)
+        Dim decryptedBytes As Byte() = decryptor.TransformFinalBlock(encryptedBytes, 0, encryptedBytes.Length)
+        Return Encoding.UTF8.GetString(decryptedBytes)
+    End Function
+
+    Private Function WaitForCardTap(ByRef hContext As IntPtr, ByRef hCard As IntPtr, ByRef activeProtocol As Integer, ByRef readerName As String) As Boolean
+        MessageBox.Show("Please tap your NFC card.", "Waiting for NFC", MessageBoxButtons.OK, MessageBoxIcon.Information)
+        Return ConnectToCard(hContext, hCard, activeProtocol, readerName)
+    End Function
+
+
+
+    Private Sub encodebtn_Click(sender As Object, e As EventArgs) Handles encodebtn.Click
+        If String.IsNullOrWhiteSpace(pathTB.Text) Then
+            MessageBox.Show("Path cannot be empty.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            Return
+        End If
+
+        Dim fullUrl As String = urlcb.Text.Trim() & pathTB.Text.Trim()
+
+        If fullUrl.Length > 160 Then
+            MessageBox.Show("URL is too long for NTAG213! Max 160 characters.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            Return
+        End If
+
+        ' Encrypt the URL path
+        Dim key As String = "0123456789abcdef0123456789abcdef" ' 32-byte AES key
+        Dim iv As String = "abcdef9876543210" ' 16-byte IV
+        Dim encryptedPath As String = EncryptText(pathTB.Text.Trim(), key, iv)
+        Dim encryptedFullUrl As String = urlcb.Text.Trim() & encryptedPath
+
+        Dim ndefData As Byte() = EncodeNDEFUrl(encryptedFullUrl)
+
+        Dim hContext As IntPtr = IntPtr.Zero
+        Dim hCard As IntPtr = IntPtr.Zero
+        Dim activeProtocol As Integer = 0
+        Dim readerName As String = ""
+
+        If Not WaitForCardTap(hContext, hCard, activeProtocol, readerName) Then
+            MessageBox.Show("Failed to detect NFC card.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            Return
+        End If
+
+        If WriteToNFCCard(ndefData) Then
+            MessageBox.Show("Encrypted URL successfully written to NFC card!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information)
+        Else
+            MessageBox.Show("Failed to write encrypted URL to NFC card.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End If
+    End Sub
+
+
+
+    '-------------------------------
+    ' NDEF Encoding and NFC Writing
+    '-------------------------------
+    Private Function EncodeNDEFUrl(url As String) As Byte()
+        Dim uriIdentifier As Byte = 0
+        Dim formattedUrl As String = url
+
+        Select Case True
+            Case url.StartsWith("http://www.", StringComparison.OrdinalIgnoreCase)
+                uriIdentifier = &H1
+                formattedUrl = url.Substring(11)
+            Case url.StartsWith("https://www.", StringComparison.OrdinalIgnoreCase)
+                uriIdentifier = &H2
+                formattedUrl = url.Substring(12)
+            Case url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+                uriIdentifier = &H4
+                formattedUrl = url.Substring(8)
+            Case url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                uriIdentifier = &H3
+                formattedUrl = url.Substring(7)
+            Case Else
+                uriIdentifier = &H0
+                formattedUrl = url
+        End Select
+
+        Dim urlBytes As Byte() = Encoding.UTF8.GetBytes(formattedUrl)
+
+        Dim payloadLength As Integer = urlBytes.Length + 1
+        Dim ndefRecord As New List(Of Byte)
+
+        ndefRecord.Add(&HD1)                    ' NDEF Record header (MB, ME, SR, TNF)
+        ndefRecord.Add(&H1)                     ' Type Length (1 byte)
+        ndefRecord.Add(CByte(payloadLength))    ' Payload Length
+        ndefRecord.Add(&H55)                    ' Type ('U' for URI)
+        ndefRecord.Add(uriIdentifier)           ' URI Identifier Code
+        ndefRecord.AddRange(urlBytes)           ' Remaining URL Data
+
+
+        Dim tlv As New List(Of Byte)
+        tlv.Add(&H3)                         ' NDEF Message TLV Tag
+        tlv.Add(CByte(ndefRecord.Count))      ' Length of the NDEF record
+        tlv.AddRange(ndefRecord)
+        tlv.Add(&HFE)                         ' Terminator TLV
+
+        Return tlv.ToArray()
+    End Function
+
+
+    ' Connects to the NFC card and returns the context, card handle, active protocol, and reader name.
+    Private Function ConnectToCard(ByRef hContext As IntPtr, ByRef hCard As IntPtr, ByRef activeProtocol As Integer, ByRef readerName As String) As Boolean
+        hContext = IntPtr.Zero
+        hCard = IntPtr.Zero
+        activeProtocol = 0
+
+        If SCardEstablishContext(SCARD_SCOPE_USER, IntPtr.Zero, IntPtr.Zero, hContext) <> 0 Then
+            MessageBox.Show("Failed to establish context.")
+            Return False
+        End If
+
+        Dim readers As Byte() = New Byte(255) {}
+        Dim readersLen As Integer = readers.Length
+        If SCardListReaders(hContext, Nothing, readers, readersLen) <> 0 Then
+            SCardReleaseContext(hContext)
+            MessageBox.Show("Failed to list readers.")
+            Return False
+        End If
+
+        readerName = Encoding.ASCII.GetString(readers, 0, readersLen).TrimEnd(Chr(0))
+        If String.IsNullOrEmpty(readerName) Then
+            SCardReleaseContext(hContext)
+            MessageBox.Show("No NFC reader found.")
+            Return False
+        End If
+
+        ' Connect to the card.
+        Dim result As Integer = SCardConnect(hContext, readerName, SCARD_SHARE_SHARED, SCARD_PROTOCOL_T0 Or SCARD_PROTOCOL_T1, hCard, activeProtocol)
+        If result <> 0 Then
+            SCardReleaseContext(hContext)
+            MessageBox.Show("Failed to connect to NFC card.")
+            Return False
+        End If
+
+        Return True
+    End Function
+
+
+    ' Writes the NDEF data to the card in 4-byte pages starting at page 4.
+    Private Function WriteToNFCCard(ndefData As Byte()) As Boolean
+        Dim hContext As IntPtr = IntPtr.Zero
+        Dim hCard As IntPtr = IntPtr.Zero
+        Dim activeProtocol As Integer = 0
+        Dim readerName As String = ""
+
+        If Not ConnectToCard(hContext, hCard, activeProtocol, readerName) Then
+            Return False
+        End If
+
+        ' Choose the proper PCI structure pointer based on the active protocol.
+        Dim pioSendPci As IntPtr = IntPtr.Zero
+        If activeProtocol = SCARD_PROTOCOL_T0 Then
+            pioSendPci = SCARD_PCI_T0
+        ElseIf activeProtocol = SCARD_PROTOCOL_T1 Then
+            pioSendPci = SCARD_PCI_T1
+        Else
+            SCardDisconnect(hCard, SCARD_LEAVE_CARD)
+            SCardReleaseContext(hContext)
+            MessageBox.Show("Unknown active protocol.")
+            Return False
+        End If
+
+        ' NTAG213 pages are 4 bytes each; we start at page 4.
+        Dim page As Integer = 4
+        For i As Integer = 0 To ndefData.Length - 1 Step 4
+            ' Get 4 bytes (or less) and pad with zeros if needed.
+            Dim chunk As Byte() = ndefData.Skip(i).Take(4).ToArray()
+            If chunk.Length < 4 Then
+                Dim padded(3) As Byte
+                Array.Copy(chunk, padded, chunk.Length)
+                chunk = padded
+            End If
+
+            ' APDU Command for writing:
+            '   CLA: 0xFF, INS: 0xD6, P1: 0x00, P2: page number, Lc: 0x04, Data: 4 bytes
+            Dim apdu As Byte() = {&HFF, &HD6, 0, CByte(page), 4, chunk(0), chunk(1), chunk(2), chunk(3)}
+            Dim recvBuffer(255) As Byte
+            Dim recvLen As Integer = recvBuffer.Length
+
+            Dim ret As Integer = SCardTransmit(hCard, pioSendPci, apdu, apdu.Length, IntPtr.Zero, recvBuffer, recvLen)
+            If ret <> 0 Then
+                MessageBox.Show("Error writing to page " & page.ToString())
+                SCardDisconnect(hCard, SCARD_LEAVE_CARD)
+                SCardReleaseContext(hContext)
+                Return False
+            End If
+
+            page += 1
+        Next
+
+        SCardDisconnect(hCard, SCARD_LEAVE_CARD)
+        SCardReleaseContext(hContext)
+        Return True
+    End Function
+
+
+
+    '-------------------------------
+    ' READER PROGRAM (MODIFIED)
+    '-------------------------------
+    Private Sub readerbtn_Click(sender As Object, e As EventArgs) Handles readerbtn.Click
+        Dim hContext As IntPtr = IntPtr.Zero
+        Dim hCard As IntPtr = IntPtr.Zero
+        Dim activeProtocol As Integer = 0
+        Dim readerName As String = ""
+
+        If Not WaitForCardTap(hContext, hCard, activeProtocol, readerName) Then
+            MessageBox.Show("Failed to detect NFC card.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            Return
+        End If
+
+        Dim encryptedUrl As String = ReadFromNFCCard(hCard, activeProtocol)
+
+        If String.IsNullOrEmpty(encryptedUrl) Then
+            MessageBox.Show("No NDEF data found.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        Else
+            ' Extract base URL and encrypted path
+            Dim baseUrl As String = urlcb.Text.Trim()
+            Dim encryptedPath As String = encryptedUrl.Replace(baseUrl, "")
+
+            ' Decrypt the path
+            Dim key As String = "0123456789abcdef0123456789abcdef"
+            Dim iv As String = "abcdef9876543210"
+            Dim decryptedPath As String = DecryptText(encryptedPath, key, iv)
+            Dim decryptedUrl As String = baseUrl & decryptedPath
+
+            MessageBox.Show("Decrypted URL from NFC card: " & decryptedUrl, "Success", MessageBoxButtons.OK, MessageBoxIcon.Information)
+        End If
+
+        SCardDisconnect(hCard, SCARD_LEAVE_CARD)
+        SCardReleaseContext(hContext)
+    End Sub
+
+
+    Private Function ReadFromNFCCard(hCard As IntPtr, activeProtocol As Integer) As String
+        Dim pioSendPci As IntPtr = If(activeProtocol = SCARD_PROTOCOL_T0, SCARD_PCI_T0, SCARD_PCI_T1)
+        Dim recvBuffer(255) As Byte
+        Dim recvLen As Integer = recvBuffer.Length
+
+        ' Read pages 4-15 (First 44 bytes)
+        Dim rawData As New List(Of Byte)
+        For page As Integer = 4 To 15
+            Dim apdu As Byte() = {&HFF, &HB0, 0, CByte(page), 4} ' Read 4 bytes
+            Dim ret As Integer = SCardTransmit(hCard, pioSendPci, apdu, apdu.Length, IntPtr.Zero, recvBuffer, recvLen)
+            If ret <> 0 Then Return ""
+
+            rawData.AddRange(recvBuffer.Take(4))
+        Next
+
+        ' Find NDEF TLV start
+        Dim tlvStart As Integer = rawData.IndexOf(&H3)
+        If tlvStart = -1 OrElse tlvStart + 2 >= rawData.Count Then Return ""
+
+        Dim ndefLength As Integer = rawData(tlvStart + 1)
+        If tlvStart + 2 + ndefLength > rawData.Count Then Return ""
+
+        ' Extract NDEF record
+        Dim ndefRecord As Byte() = rawData.Skip(tlvStart + 2).Take(ndefLength).ToArray()
+        If ndefRecord.Length < 5 Then Return ""
+
+        ' Validate NDEF record type (should be URI)
+        If ndefRecord(3) <> &H55 Then Return ""
+
+        ' Extract URI Identifier (Byte 4)
+        Dim uriIdentifier As Byte = ndefRecord(4)
+
+        ' Extract actual URL data
+        Dim urlData As String = Encoding.UTF8.GetString(ndefRecord, 5, ndefRecord.Length - 5)
+
+        ' Correct URI prefix mapping
+        Dim urlPrefix As String = ""
+        Select Case uriIdentifier
+            Case &H0 : urlPrefix = ""
+            Case &H1 : urlPrefix = "http://www."
+            Case &H2 : urlPrefix = "https://www."
+            Case &H3 : urlPrefix = "http://"
+            Case &H4 : urlPrefix = "https://"
+            Case Else : urlPrefix = ""
+        End Select
+
+        Return urlPrefix & urlData
+    End Function
+
+
+    '-------------------------------
+    ' Event Handlers (UI Actions)
+    '-------------------------------
+    Private Sub qr_pgenbtn_Click(sender As Object, e As EventArgs) Handles qr_pgenbtn.Click
+        Try
+            If urlcb.SelectedItem Is Nothing OrElse String.IsNullOrEmpty(urlcb.SelectedItem.ToString()) Then
+                MessageBox.Show("Please select a URL prefix (http:// or https://).", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                Return
+            End If
+
+            If String.IsNullOrEmpty(pathTB.Text) Then
+                MessageBox.Show("Please enter a valid path.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                Return
+            End If
+
+            ' Open folder browser dialog for user to select the save location
+            Dim folderPath As String = ""
+            Using folderDialog As New FolderBrowserDialog()
+                folderDialog.Description = "Select a folder to save the QR Code"
+                If folderDialog.ShowDialog() = DialogResult.OK Then
+                    folderPath = folderDialog.SelectedPath
+                Else
+                    MessageBox.Show("No folder selected. QR Code generation canceled.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                    Return
+                End If
+            End Using
+
+            Dim fullUrl As String = urlcb.SelectedItem.ToString() & pathTB.Text
+
+            ' Generate QR Code
+            Dim qrGenerator As New QRCodeGenerator()
+            Dim qrCodeData As QRCodeData = qrGenerator.CreateQrCode(fullUrl, QRCodeGenerator.ECCLevel.Q)
+            Dim qrCode As New QRCode(qrCodeData)
+
+            ' Generate QR code as a Bitmap
+            Using qrImage As Bitmap = qrCode.GetGraphic(10)
+                ' Create a valid filename (from path)
+                Dim safeFileName As String = String.Join("_", pathTB.Text.Split(Path.GetInvalidFileNameChars())).Trim()
+                If String.IsNullOrEmpty(safeFileName) Then safeFileName = "GeneratedQRCode"
+
+                ' Save the QR Code as JPG in the selected folder
+                Dim filePath As String = Path.Combine(folderPath, safeFileName & ".jpg")
+                qrImage.Save(filePath, System.Drawing.Imaging.ImageFormat.Jpeg)
+            End Using
+
+            MessageBox.Show("QR Code successfully generated and saved to: " & folderPath, "Success", MessageBoxButtons.OK, MessageBoxIcon.Information)
+        Catch ex As Exception
+            MessageBox.Show("Error generating QR Code: " & ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+
+
+    Private Sub batchbtn_Click(sender As Object, e As EventArgs) Handles batchbtn.Click
+        Me.Hide()
+        batch.Show()
+
+    End Sub
+
+    Private Sub qr_genbtn_Click(sender As Object, e As EventArgs) Handles qr_cgenbtn.Click
+        Dim rawPath As String = pathTB.Text.Trim()
+        Dim vcardForm As New generator()
+
+        If Not String.IsNullOrWhiteSpace(rawPath) Then
+            vcardForm.PreloadedURL = urlcb.Text.Trim() & rawPath
+        End If
+
+        vcardForm.Show()
+
+    End Sub
+
+    Private Sub exitbtn_Click_1(sender As Object, e As EventArgs) Handles exitbtn.Click
+        Application.Exit()
+    End Sub
+
+End Class

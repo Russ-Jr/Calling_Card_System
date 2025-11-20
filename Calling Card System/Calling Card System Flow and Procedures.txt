@@ -1,0 +1,44 @@
+💻 System Flow and Procedures Analysis
+🔑 Admin Module (VB.NET WebView & NFC Bridge)
+Platform: VB.NET desktop application1.
+Interface: Uses a WebView to display the PHP website ($\text{admin/dashboard.php}$) and is designed to open on an "account Tab login" first.
+NFC Bridging: The VB.NET application is essential for NFC Reader (ACR122u) compatibility, acting as the bridge to handle the card-tapping process for registration.
+
+- Registration Flow:
+	1. Admin enters employee details (first name, last name, email, etc.).
+	2. Admin clicks a separate button for NDEF URL registration.
+	3. The VB.NET application awaits an NFC card tap via the reader.	
+	4. Upon tap, the VB.NET component reads the NFC UID and sends it to the database for storage.
+	5. The VB.NET component then formats and writes the member's unique NDEF URL (e.g., 			https://myhostingwebsite.com/user/dashboard.php?{data}) to the NFC Card.
+	6. The system creates a user account (default username: firstname + lastname + year, password: 123456) and sends credentials via SMTP 	email.
+
+Functionalities:
+- Data Management: Add, edit, and delete employee/card holder member data and login credentials.
+- Company Section: Modify company details (logo, name, address, contact, social media, map location).
+- Product Section: Upload and manage product images.
+- Account Modification: Log in to enable editing/adding features and modify admin credentials.
+- Admin Public View: Tapping the admin card on a phone shows a read-only user dashboard view, hiding sensitive admin details.
+
+________________________________________
+📱 User Module (PHP Webpage)
+Interface: Pure website/webpage, fixed portrait design for mobile view.
+Access: When the user taps their NFC Card on a phone, the NDEF URL is detected, which forces the phone's browser to open the user's dashboard URL (e.g., user/dashboard.php?{data}).
+Display:
+- Header: Logo (from admin settings) and an account tab.
+- Personal: Profile picture, editable social media icons, and personal details.
+- Company: Displays the company section as set by the admin (including the map).
+- Products: Displays the product images uploaded by the admin.
+Account Modification: To edit personal details or change the password, the user must click the account tab and log in with their credentials.
+
+________________________________________
+💾 NFC-NDEF Write Code Reference (VB.NET)
+The NFC-NDEF_Write Code.txt sample code demonstrates the core functions the VB.NET NFC Bridge is designed to perform:
+SCard Functions: Imports Windows Smart Card API functions (winscard.dll) for connecting to the reader, listing readers, and transmitting commands (SCardEstablishContext, SCardListReaders, SCardConnect, SCardTransmit, SCardDisconnect, SCardReleaseContext).
+Encryption: The URL path is encrypted using AES (32-byte key, 16-byte IV) before encoding into the NDEF message, adding a layer of security to the unique user ID/path.
+NDEF Encoding:
+- It creates a URI NDEF Record by mapping common prefixes (e.g., https://, http://www.) to a 1-byte URI Identifier Code (&H1 to &H4) and stripping the prefix from the URL string, thus saving space on the tag.
+- It wraps the NDEF Record with an NDEF Message TLV (Tag &H3) and a Terminator TLV (&HFE).
+Card Writing:
+- It uses the APDU Command &HFF, &HD6 (Write Binary) to write the NDEF data.
+- Data is written in 4-byte pages (NTAG213 standard) starting at Page.
+
