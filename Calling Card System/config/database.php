@@ -6,9 +6,7 @@
 
 // Database credentials
 define('DB_HOST', 'localhost');
-define('DB_USER', 'ndasphilsinc');
-define('DB_PASS', '%aa}gX)ig=Yh');
-define('DB_NAME', 'ndasphilsinc_callingcard_db');
+
 define('DB_PORT', 3306);
 
 // Site configuration
