@@ -43,10 +43,8 @@ define('ROLE_ADMIN', 'admin');
 define('ROLE_USER', 'user');
 
 // SMTP Configuration
-define('MAIL_HOST', 'mail.ndasphilsinc.com');
-define('MAIL_USER', 'russel@ndasphilsinc.com');
-define('MAIL_PASS', 'RusselNDAS2025');
+ 
 define('MAIL_PORT', 587);
-define('MAIL_FROM_EMAIL', 'russel@ndasphilsinc.com');
+ 
 define('MAIL_FROM_NAME', 'Calling Card System');
 
